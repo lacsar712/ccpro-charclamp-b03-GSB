@@ -60,6 +60,7 @@ def seed_demo() -> None:
                     clamp=c3,
                     started_at=now - timedelta(days=2),
                     peak_temp_c=520.0,
+                    closed_at=now - timedelta(days=2, hours=1),
                     charcoal_grade="A+",
                     notes="已出炭班次",
                 ),

@@ -30,6 +30,10 @@
           <span>窑态</span>
           <strong class="badge badge-{{ shift.clamp.status }}">{{ status_labels.get(shift.clamp.status, shift.clamp.status) }}</strong>
         </div>
+        <div class="metric">
+          <span>收火</span>
+          <strong>{% if shift.closed_at %}{{ shift.closed_at.strftime('%Y-%m-%d %H:%M') }}{% else %}—{% endif %}</strong>
+        </div>
       </div>
       {% if shift.notes %}
       <p class="timeline-note">{{ shift.notes }}</p>

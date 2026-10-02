@@ -25,10 +25,19 @@ else:
 PY
 
 python << 'PY'
-from charclamp.infra.db import sync_create_all
+from sqlalchemy import text
+from charclamp.infra.db import sync_create_all, sync_engine
 from charclamp.infra.seed import seed_demo
 
 sync_create_all()
+# 轻量幂等迁移：老数据卷可能缺少收火时刻列。
+with sync_engine.begin() as conn:
+    conn.execute(
+        text(
+            "ALTER TABLE burn_shifts "
+            "ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP WITH TIME ZONE"
+        )
+    )
 seed_demo()
 print("migrate/seed done")
 PY

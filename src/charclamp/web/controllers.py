@@ -8,10 +8,17 @@ from litestar.enums import RequestEncodingType
 from litestar.params import Body
 from litestar.response import Redirect, Template
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from charclamp.domain.models import BurnShift, Clamp, User
-from charclamp.domain.rules import RuleError, assert_can_set_clamp_status, can_mark_clamp_drawn
+from charclamp.domain.rules import (
+    RuleError,
+    assert_can_set_clamp_status,
+    can_mark_clamp_drawn,
+    can_role_draw,
+    mark_clamp_drawn,
+)
 from charclamp.infra.db import SessionLocal
 from charclamp.infra.security import verify_password
 
@@ -185,6 +192,7 @@ class TimelineController(Controller):
                 "status_labels": STATUS_LABELS,
                 "can_drawn": can_drawn,
                 "drawn_msg": drawn_msg,
+                "can_role_draw": can_role_draw(request.user.role if request.user else None),
                 "user": request.user,
             },
         )
@@ -230,6 +238,38 @@ class ClampController(Controller):
     path = "/clamps"
     tags = ["clamps"]
 
+    async def _do_draw(self, request: Request, clamp_id: int) -> Redirect:
+        """标记已出炭的统一入口：校验角色后，在单事务内改窑态并写收火时刻。"""
+        if not request.user:
+            return Redirect("/login")
+        if not can_role_draw(request.user.role):
+            _set_flash(request, "操作工无权出炭，仅主管可将窑标记为已出炭", "error")
+            return Redirect(f"/?clamp_id={clamp_id}")
+        async with SessionLocal() as db:
+            try:
+                clamp, shift = await mark_clamp_drawn(db, clamp_id)
+                await db.commit()
+                closed_text = shift.closed_at.strftime("%Y-%m-%d %H:%M") if shift.closed_at else "—"
+                _set_flash(
+                    request,
+                    f"窑 {clamp.code} 已出炭，最近班次收火时刻 {closed_text}",
+                    "ok",
+                )
+            except RuleError as exc:
+                # 整笔回滚：窑态与收火时刻都不落库。
+                await db.rollback()
+                _set_flash(request, str(exc), "error")
+            except SQLAlchemyError:
+                # 并发冲突（如序列化/锁超时）时同样整笔回滚，保证至多一笔入库。
+                await db.rollback()
+                _set_flash(request, "出炭操作冲突，该窑可能已被标记，请刷新后重试", "error")
+        return Redirect(f"/?clamp_id={clamp_id}")
+
+    @post("/{clamp_id:int}/draw")
+    async def draw(self, request: Request, clamp_id: int) -> Redirect:
+        """抽屉出炭接口。"""
+        return await self._do_draw(request, clamp_id)
+
     @post("/{clamp_id:int}/status")
     async def set_status(
         self,
@@ -240,6 +280,9 @@ class ClampController(Controller):
         if not request.user:
             return Redirect("/login")
         new_status = (data.get("status") or "").strip()
+        # 改为已出炭一律走原子出炭事务（同时写收火时刻、行锁防并发双标）。
+        if new_status == Clamp.STATUS_DRAWN:
+            return await self._do_draw(request, clamp_id)
         async with SessionLocal() as db:
             result = await db.execute(
                 select(Clamp)

@@ -63,6 +63,8 @@ class BurnShift(Base):
     clamp_id: Mapped[int] = mapped_column(ForeignKey("clamps.id"), nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     peak_temp_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # 收火时刻：窑被标记为「已出炭」时写入该窑最近一班；未出炭时为空。
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     charcoal_grade: Mapped[str] = mapped_column(String(40), nullable=False, default="B")
     notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
