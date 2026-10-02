@@ -22,8 +22,8 @@
       >为本窑登记班次</button>
 
       {% if clamp.status != 'drawn' %}
-      <form method="post" action="/clamps/{{ clamp.id }}/status">
-        <input type="hidden" name="status" value="drawn" />
+        {% if user.role == 'admin' %}
+      <form method="post" action="/clamps/{{ clamp.id }}/draw">
         <button type="submit" class="btn {% if not can_drawn %}is-disabled{% endif %}" {% if not can_drawn %}disabled{% endif %}>
           标记已出炭
         </button>
@@ -31,8 +31,12 @@
       {% if not can_drawn %}
       <p class="hint warn">{{ drawn_msg }}</p>
       {% else %}
-      <p class="hint">最近班次峰值已达标（≥ 400℃），可标记出炭。</p>
+      <p class="hint">最近班次峰值已达标（≥ 400℃），标记后将同时写入收火时刻。</p>
       {% endif %}
+        {% else %}
+      <button type="button" class="btn is-disabled" disabled>标记已出炭</button>
+      <p class="hint warn">操作工无权出炭，须由主管标记。</p>
+        {% endif %}
       {% else %}
       <form method="post" action="/clamps/{{ clamp.id }}/status">
         <input type="hidden" name="status" value="stacked" />

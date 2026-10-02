@@ -23,5 +23,5 @@ session_auth = SessionAuth[User, ServerSideSessionBackend](
     session_backend_config=ServerSideSessionConfig(
         session_id_bytes=32,
     ),
-    exclude=["/", "/login", "/logout", "/static", "/schema", "/favicon.ico"],
+    exclude=["/login", "/logout", "/static", "/schema", "/favicon.ico"],
 )

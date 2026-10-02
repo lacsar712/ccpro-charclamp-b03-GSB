@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -27,6 +27,14 @@ SyncSessionLocal = sessionmaker(sync_engine, expire_on_commit=False, class_=Sess
 
 def sync_create_all() -> None:
     Base.metadata.create_all(sync_engine)
+    # create_all 不会给已存在的表补列，幂等补收火时刻列。
+    with sync_engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE burn_shifts "
+                "ADD COLUMN IF NOT EXISTS fire_closed_at TIMESTAMPTZ NULL"
+            )
+        )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

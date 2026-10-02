@@ -38,7 +38,15 @@
 
 炭窑状态不可设为「已出炭」（`drawn`），除非该窑**最近一条** `BurnShift` 的 `peakTempC` 已记录且 **≥ 400℃**。
 
-规则实现：`src/charclamp/domain/rules.py`
+标记已出炭时（抽屉出炭 `POST /clamps/{id}/draw` 与改窑态 `POST /clamps/{id}/status` 两接口等价），在**同一事务**内：
+
+1. `SELECT ... FOR UPDATE` 锁住窑行——两名主管并发抢标同一窑时，后到者看到窑已 `drawn` 而被拒，**至多一笔入库**；
+2. 无班次 / 峰值未记录 / 峰值 < 400℃ 一律**整笔回滚**，窑态绝不先改；
+3. 校验通过后才给最近一班写 `fire_closed_at`（收火时刻）并把窑态置为 `drawn`，收火时刻只跟成功提交的那一笔，与库中值差为 0。
+
+**操作工（worker）禁止出炭**；只有主管（admin）能标记。种子保留一口峰值已达标（455℃）但仍焖烧中的窑（坞东-甲）供出炭演示。
+
+规则实现：`src/charclamp/domain/rules.py`（纯判定）与 `src/charclamp/domain/services.py`（事务性出炭服务）
 
 ## 快速启动
 
